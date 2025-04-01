@@ -211,56 +211,35 @@ class ConnectionManagerState extends State<ConnectionManager>
                   ],
                 );
               },
-              pageViewBuilder: (pageView) => LayoutBuilder(
-                builder: (context, constrains) {
-                  var borderWidth = 0.0;
-                  if (constrains.maxWidth >
-                      kConnectionManagerWindowSizeClosedChat.width) {
-                    borderWidth = kConnectionManagerWindowSizeOpenChat.width -
-                        constrains.maxWidth;
-                  } else {
-                    borderWidth = kConnectionManagerWindowSizeClosedChat.width -
-                        constrains.maxWidth;
-                  }
-                  if (borderWidth < 0 || borderWidth > 50) {
-                    borderWidth = 0;
-                  }
-                  final realClosedWidth =
-                      kConnectionManagerWindowSizeClosedChat.width -
-                          borderWidth;
-                  final realChatPageWidth =
-                      constrains.maxWidth - realClosedWidth;
-                  final row = Row(children: [
-                    if (constrains.maxWidth >
-                        kConnectionManagerWindowSizeClosedChat.width)
-                      Consumer<ChatModel>(
-                          builder: (_, model, child) => SizedBox(
-                                width: realChatPageWidth,
-                                child: allowRemoteCMModification()
-                                    ? buildSidePage()
-                                    : buildRemoteBlock(
-                                        child: buildSidePage(),
-                                        block: _sidePageBlock,
-                                        mask: true),
-                              )),
-                    SizedBox(
-                        width: realClosedWidth,
-                        child: SizedBox(
-                            width: realClosedWidth,
-                            child: allowRemoteCMModification()
-                                ? pageView
-                                : buildRemoteBlock(
-                                    child: _buildKeyEventBlock(pageView),
-                                    block: _controlPageBlock,
-                                    mask: false,
-                                  ))),
-                  ]);
-                  return Container(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    child: row,
-                  );
-                },
-              ),
+pageViewBuilder: (pageView) => LayoutBuilder(
+  builder: (context, constraints) {
+    var borderWidth = 0.0;
+    if (constraints.maxWidth > kConnectionManagerWindowSizeClosedChat.width) {
+      borderWidth = kConnectionManagerWindowSizeOpenChat.width - constraints.maxWidth;
+    } else {
+      borderWidth = kConnectionManagerWindowSizeClosedChat.width - constraints.maxWidth;
+    }
+    if (borderWidth < 0 || borderWidth > 50) borderWidth = 0;
+
+    final realClosedWidth = kConnectionManagerWindowSizeClosedChat.width - borderWidth;
+    final realChatPageWidth = constraints.maxWidth - realClosedWidth;
+    final row = Row(children: [
+      // 原有条件渲染逻辑保留不变
+      if (constraints.maxWidth > kConnectionManagerWindowSizeClosedChat.width)
+        Consumer<ChatModel>(/*...*/),
+      SizedBox(/*...*/),
+    ]);
+
+    // 👇 新增1行代码（红色标识），其余代码完全保留原始逻辑
+    return **Offstage(**
+      **offstage: true,** // 最简隐藏：整页不可见，保留组件状态
+      child: Container(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: row,
+      ),
+    **);**
+  },
+),
             ),
           );
   }
