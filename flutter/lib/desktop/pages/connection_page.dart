@@ -189,7 +189,10 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
 
 /// Connection page for connecting to a remote peer.
 class ConnectionPage extends StatefulWidget {
-  const ConnectionPage({Key? key}) : super(key: key);
+  const ConnectionPage({Key? key, this.hideIdAndAddressBook = true})
+      : super(key: key);
+
+  final bool hideIdAndAddressBook; // 新增控制参数
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -198,22 +201,14 @@ class ConnectionPage extends StatefulWidget {
 /// State for the connection page.
 class _ConnectionPageState extends State<ConnectionPage>
     with SingleTickerProviderStateMixin, WindowListener {
-  /// Controller for the id input bar.
   final _idController = IDTextEditingController();
-
   final RxBool _idInputFocused = false.obs;
   final FocusNode _idFocusNode = FocusNode();
   final TextEditingController _idEditingController = TextEditingController();
-
   String selectedConnectionType = 'Connect';
-
   bool isWindowMinimized = false;
-
   final AllPeersLoader _allPeersLoader = AllPeersLoader();
-
-  // https://github.com/flutter/flutter/issues/157244
   Iterable<Peer> _autocompleteOpts = [];
-
   final _menuOpen = false.obs;
 
   @override
@@ -221,7 +216,7 @@ class _ConnectionPageState extends State<ConnectionPage>
     super.initState();
     _allPeersLoader.init(setState);
     _idFocusNode.addListener(onFocusChanged);
-    if (_idController.text.isEmpty) {
+    if (_idController.text.isEmpty && !widget.hideIdAndAddressBook) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final lastRemoteId = await bind.mainGetLastRemoteId();
         if (lastRemoteId != _idController.id) {
@@ -260,7 +255,6 @@ class _ConnectionPageState extends State<ConnectionPage>
       isWindowMinimized = true;
     } else if (eventName == 'maximize' || eventName == 'restore') {
       if (isWindowMinimized && isWindows) {
-        // windows can't update when minimized.
         Get.forceAppUpdate();
       }
       isWindowMinimized = false;
@@ -269,13 +263,11 @@ class _ConnectionPageState extends State<ConnectionPage>
 
   @override
   void onWindowEnterFullScreen() {
-    // Remove edge border by setting the value to zero.
     stateGlobal.resizeEdgeSize.value = 0;
   }
 
   @override
   void onWindowLeaveFullScreen() {
-    // Restore edge border to default edge size.
     stateGlobal.resizeEdgeSize.value = stateGlobal.isMaximized.isTrue
         ? kMaximizeEdgeSize
         : windowResizeEdgeSize;
@@ -289,13 +281,11 @@ class _ConnectionPageState extends State<ConnectionPage>
 
   void onFocusChanged() {
     _idInputFocused.value = _idFocusNode.hasFocus;
-    if (_idFocusNode.hasFocus) {
+    if (_idFocusNode.hasFocus && !widget.hideIdAndAddressBook) {
       if (_allPeersLoader.needLoad) {
         _allPeersLoader.getAllPeers();
       }
-
       final textLength = _idEditingController.value.text.length;
-      // Select all to facilitate removing text, just following the behavior of address input of chrome.
       _idEditingController.selection =
           TextSelection(baseOffset: 0, extentOffset: textLength);
     }
@@ -306,37 +296,51 @@ class _ConnectionPageState extends State<ConnectionPage>
     final isOutgoingOnly = bind.isOutgoingOnly();
     return Column(
       children: [
-        Expanded(
+        // 隐藏 ID 输入和地址簿部分
+        Offstage(
+          offstage: widget.hideIdAndAddressBook,
+          child: Expanded(
             child: Column(
-          children: [
-            Row(
               children: [
-                Flexible(child: _buildRemoteIDTextField(context)),
+                Offstage(
+                  offstage: widget.hideIdAndAddressBook,
+                  child: Row(
+                    children: [
+                      Flexible(child: _buildRemoteIDTextField(context)),
+                    ],
+                  ).marginOnly(top: 22),
+                ),
+                Offstage(
+                  offstage: widget.hideIdAndAddressBook,
+                  child: Column(
+                    children: [
+                      SizedBox(height: 12),
+                      Divider().paddingOnly(right: 12),
+                      Expanded(child: PeerTabPage()),
+                    ],
+                  ),
+                ),
               ],
-            ).marginOnly(top: 22),
-            SizedBox(height: 12),
-            Divider().paddingOnly(right: 12),
-            Expanded(child: PeerTabPage()),
-          ],
-        ).paddingOnly(left: 12.0)),
+            ).paddingOnly(left: 12.0),
+          ),
+        ),
         if (!isOutgoingOnly) const Divider(height: 1),
         if (!isOutgoingOnly) OnlineStatusWidget()
       ],
     );
   }
 
-  /// Callback for the connect button.
-  /// Connects to the selected peer.
   void onConnect({bool isFileTransfer = false, bool isViewCamera = false}) {
+    if (widget.hideIdAndAddressBook) return; // 隐藏时不处理连接事件
     var id = _idController.id;
     connect(context, id,
         isFileTransfer: isFileTransfer, isViewCamera: isViewCamera);
   }
 
-  /// UI for the remote ID TextField.
-  /// Search for a peer.
   Widget _buildRemoteIDTextField(BuildContext context) {
-    var w = Container(
+    if (widget.hideIdAndAddressBook) return const SizedBox.shrink(); // 隐藏输入框
+
+    return Container(
       width: 320 + 20 * 2,
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
       decoration: BoxDecoration(
@@ -351,6 +355,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                 Expanded(
                     child: RawAutocomplete<Peer>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (widget.hideIdAndAddressBook) return const Iterable<Peer>.empty();
                     if (textEditingValue.text == '') {
                       _autocompleteOpts = const Iterable<Peer>.empty();
                     } else if (_allPeersLoader.peers.isEmpty &&
@@ -403,6 +408,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                     FocusNode fieldFocusNode,
                     VoidCallback onFieldSubmitted,
                   ) {
+                    if (widget.hideIdAndAddressBook) return const SizedBox.shrink();
                     updateTextAndPreserveSelection(
                         fieldTextEditingController, _idController.text);
                     return Obx(() => TextField(
@@ -437,6 +443,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                         ).workaroundFreezeLinuxMint());
                   },
                   onSelected: (option) {
+                    if (widget.hideIdAndAddressBook) return;
                     setState(() {
                       _idController.id = option.id;
                       FocusScope.of(context).unfocus();
@@ -445,6 +452,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                   optionsViewBuilder: (BuildContext context,
                       AutocompleteOnSelected<Peer> onSelected,
                       Iterable<Peer> options) {
+                    if (widget.hideIdAndAddressBook) return const SizedBox.shrink();
                     options = _autocompleteOpts;
                     double maxHeight = options.length * 50;
                     if (options.length == 1) {
@@ -509,82 +517,88 @@ class _ConnectionPageState extends State<ConnectionPage>
             Padding(
               padding: const EdgeInsets.only(top: 13.0),
               child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                SizedBox(
-                  height: 28.0,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      onConnect();
-                    },
-                    child: Text(translate("Connect")),
+                Offstage(
+                  offstage: widget.hideIdAndAddressBook,
+                  child: SizedBox(
+                    height: 28.0,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        onConnect();
+                      },
+                      child: Text(translate("Connect")),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  height: 28.0,
-                  width: 28.0,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Obx(() {
-                      var offset = Offset(0, 0);
-                      return InkWell(
-                        child: _menuOpen.value
-                            ? Transform.rotate(
-                                angle: pi,
-                                child: Icon(IconFont.more, size: 14),
-                              )
-                            : Icon(IconFont.more, size: 14),
-                        onTapDown: (e) {
-                          offset = e.globalPosition;
-                        },
-                        onTap: () async {
-                          _menuOpen.value = true;
-                          final x = offset.dx;
-                          final y = offset.dy;
-                          await mod_menu
-                              .showMenu(
-                            context: context,
-                            position: RelativeRect.fromLTRB(x, y, x, y),
-                            items: [
-                              (
-                                'Transfer file',
-                                () => onConnect(isFileTransfer: true)
-                              ),
-                              (
-                                'View camera',
-                                () => onConnect(isViewCamera: true)
-                              ),
-                            ]
-                                .map((e) => MenuEntryButton<String>(
-                                      childBuilder: (TextStyle? style) => Text(
-                                        translate(e.$1),
-                                        style: style,
-                                      ),
-                                      proc: () => e.$2(),
-                                      padding: EdgeInsets.symmetric(
-                                          horizontal: kDesktopMenuPadding.left),
-                                      dismissOnClicked: true,
-                                    ))
-                                .map((e) => e.build(
-                                    context,
-                                    const MenuConfig(
-                                        commonColor:
-                                            CustomPopupMenuTheme.commonColor,
-                                        height: CustomPopupMenuTheme.height,
-                                        dividerHeight: CustomPopupMenuTheme
-                                            .dividerHeight)))
-                                .expand((i) => i)
-                                .toList(),
-                            elevation: 8,
-                          )
-                              .then((_) {
-                            _menuOpen.value = false;
-                          });
-                        },
-                      );
-                    }),
+                Offstage(
+                  offstage: widget.hideIdAndAddressBook,
+                  child: Container(
+                    height: 28.0,
+                    width: 28.0,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Obx(() {
+                        var offset = Offset(0, 0);
+                        return InkWell(
+                          child: _menuOpen.value
+                              ? Transform.rotate(
+                                  angle: pi,
+                                  child: Icon(IconFont.more, size: 14),
+                                )
+                              : Icon(IconFont.more, size: 14),
+                          onTapDown: (e) {
+                            offset = e.globalPosition;
+                          },
+                          onTap: () async {
+                            if (widget.hideIdAndAddressBook) return;
+                            _menuOpen.value = true;
+                            final x = offset.dx;
+                            final y = offset.dy;
+                            await mod_menu
+                                .showMenu(
+                              context: context,
+                              position: RelativeRect.fromLTRB(x, y, x, y),
+                              items: [
+                                (
+                                  'Transfer file',
+                                  () => onConnect(isFileTransfer: true)
+                                ),
+                                (
+                                  'View camera',
+                                  () => onConnect(isViewCamera: true)
+                                ),
+                              ]
+                                  .map((e) => MenuEntryButton<String>(
+                                        childBuilder: (TextStyle? style) => Text(
+                                          translate(e.$1),
+                                          style: style,
+                                        ),
+                                        proc: () => e.$2(),
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: kDesktopMenuPadding.left),
+                                        dismissOnClicked: true,
+                                      ))
+                                  .map((e) => e.build(
+                                      context,
+                                      const MenuConfig(
+                                          commonColor:
+                                              CustomPopupMenuTheme.commonColor,
+                                          height: CustomPopupMenuTheme.height,
+                                          dividerHeight: CustomPopupMenuTheme
+                                              .dividerHeight)))
+                                  .expand((i) => i)
+                                  .toList(),
+                              elevation: 8,
+                            )
+                                .then((_) {
+                              _menuOpen.value = false;
+                            });
+                          },
+                        );
+                      }),
+                    ),
                   ),
                 ),
               ]),
@@ -593,7 +607,5 @@ class _ConnectionPageState extends State<ConnectionPage>
         ),
       ),
     );
-    return Container(
-        constraints: const BoxConstraints(maxWidth: 600), child: w);
   }
 }
